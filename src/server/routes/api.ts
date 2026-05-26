@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { context, redis, reddit } from '@devvit/web/server';
+import { context, redis, reddit ,settings } from '@devvit/web/server';
+import { processQueueItem } from '../ModBuddy_engine/index';
 import type {
   DecrementResponse,
   IncrementResponse,
@@ -88,7 +89,6 @@ api.post('/decrement', async (c) => {
 
   return c.json<DecrementResponse>({ count, postId, type: 'decrement' });
 });   
-
 api.get('/modqueue', async (c) => {
   const { subredditName } = context;
 
@@ -98,12 +98,61 @@ api.get('/modqueue', async (c) => {
 
   try {
     const subreddit = await reddit.getSubredditByName(subredditName);
-    const modQueue = await subreddit.getModQueue();   
-    return c.json({ status: 'success', subreddit: subredditName, posts: modQueue });
+    
+    // FIX 1: Devvit requires the 'type' parameter when passing options
+    const rawQueue = await subreddit.getModQueue({ limit: 10, type: 'all' }).all();   
+
+    const analyzedPosts = await Promise.all(
+      rawQueue.map(async (item) => {
+        
+        // 1. Cast to 'any' to bypass the strict Post | Comment union conflicts
+        const devvitItem = item as any;
+
+        // 2. Extract text safely (Posts have titles, Comments just have bodies)
+        const title = devvitItem.title || 'Comment';
+        const text = devvitItem.body || devvitItem.text || '';
+        const combinedText = `${title} - ${text}`;
+        
+        // 3. Extract reports safely
+        // If it has numReports (Comment), use it. Otherwise, count the arrays (Post).
+        const reportsCount = devvitItem.numReports !== undefined 
+          ? devvitItem.numReports 
+          : (devvitItem.userReports?.length || 0) + (devvitItem.modReports?.length || 0);
+
+        const apiKey = await settings.get('ai_secret_key');
+
+        if (!apiKey) {
+          // Return a clean JSON error so the frontend doesn't crash
+            return c.json({ status: 'error', message: 'API Key not found in App Settings!' }, 500);
+        }
+        // 🧠 RUN THE ENGINE
+        const aiResult = await processQueueItem({
+           text: combinedText,
+           reports: reportsCount,
+           accountAgeDays: 30 // Hardcoded for now
+        }, apiKey as string);
+
+        return {
+           id: item.id,
+           title: title,
+           content: text,
+           category: aiResult.risk === 'urgent' ? 'HATE/SPAM' : aiResult.risk === 'medium' ? 'REVIEW' : 'SAFE',
+           priority: aiResult.risk === 'urgent' ? 5 : aiResult.risk === 'medium' ? 3 : 1,
+           confidence: Math.round(aiResult.confidence * 100),
+           riskScore: aiResult.risk === 'urgent' ? 95 : aiResult.risk === 'medium' ? 60 : 15,
+           recommendation: aiResult.suggestedAction.toUpperCase(),
+           engineReason: aiResult.reason
+        };
+      })
+    );
+
+    return c.json({ status: 'success', subreddit: subredditName, posts: analyzedPosts });
+
   } catch (error) {
     return c.json<ErrorResponse>({ status: 'error', message: error instanceof Error ? error.message : 'Failed' }, 500);
   }
-});   
+});
+
 api.post('/approve', async (c) => {
   const { postId } = await c.req.json<{ postId: string }>();
 

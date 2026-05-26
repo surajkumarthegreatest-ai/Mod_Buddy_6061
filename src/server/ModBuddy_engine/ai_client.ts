@@ -1,20 +1,17 @@
 import { GoogleGenAI } from "@google/genai";
-import * as dotenv from 'dotenv';
-// Note: See Warning #2 below about dotenv in Devvit
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GOOGLE_GENAI_API_KEY || '',
-});
+export async function analyzeContent(text: string, reports: number, accountAgeDays: number, apiKey: string) {
+  // Initialize the AI client using the key passed from Devvit's settings
+  const ai = new GoogleGenAI({
+    apiKey: apiKey,
+  });
 
-dotenv.config();
-
-export async function analyzeContent(text: string, reports: number, accountAgeDays: number) {
   const schema = {
     type: 'object',
     properties: {
       risk: {
         type: 'string',
-        enum: ['urgent', 'medium', 'low'], // FIXED to match UI
+        enum: ['urgent', 'medium', 'low'],
       },
       confidence: {
         type: 'number',
@@ -24,7 +21,7 @@ export async function analyzeContent(text: string, reports: number, accountAgeDa
       },
       suggestedAction: {
         type: 'string',
-        enum: ['approve', 'remove', 'flag_for_review'], // FIXED to match UI
+        enum: ['approve', 'remove', 'flag_for_review'],
       },
     },
     required: ['risk', 'confidence', 'reason', 'suggestedAction'],

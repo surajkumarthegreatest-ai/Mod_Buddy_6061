@@ -1,13 +1,5 @@
-import { useState, useEffect,CSSProperties } from "react";
-
-
-type RawApiPost = {
-  id?: number | string;
-  title?: string;
-  priority?: number;
-  confidence?: number;
-  content?: string;
-};
+import { useState, useEffect, CSSProperties } from "react";
+import { createRoot } from "react-dom/client";
 
 type Report = {
   id: number | string;
@@ -16,69 +8,28 @@ type Report = {
   priority: number;
   confidence: number;
   content: string;
-
-  // 🔥 PHASE 4 ADDITIONS
   riskScore?: number;
   recommendation?: string;
+  engineReason?: string; // Added to catch the engine's reason from the backend
 };
-
-/* =========================
-   🔥 REMOVED STATIC DATA
-   =========================
-   Now replaced with API data
-*/
 
 export const Game = () => {
   const [data, setData] = useState<Report[]>([]);
   const [selected, setSelected] = useState<Report | null>(null);
 
   /* -------------------------
-     FETCH MOD QUEUE + AI LAYER
+     FETCH MOD QUEUE (FROM REAL BACKEND)
   --------------------------*/
   const fetchQueue = async () => {
     try {
       const res = await fetch("/api/modqueue");
       const json = await res.json();
 
-      // 🔥 PHASE 4: AI RISK ENGINE + SORTING
-      const posts = (json.posts || [])
-        .map((p: RawApiPost, index: number) => {
-          const basePriority = p.priority || Math.floor(Math.random() * 5) + 1;
-          const confidence = p.confidence || Math.floor(Math.random() * 40) + 60;
-
-          // 🔥 AI RISK SCORE
-          const riskScore = Math.min(
-            100,
-            basePriority * 15 + (100 - confidence)
-          );
-
-          // 🧠 AI CLASSIFICATION
-          let category = "SAFE";
-          if (riskScore >= 75) category = "HATE/SPAM";
-          else if (riskScore >= 50) category = "REVIEW";
-          else category = "LOW RISK";
-
-          return {
-            id: p.id || index,
-            title: p.title || "No title",
-            category,
-            priority: basePriority,
-            confidence,
-            content: p.content || p.title || "",
-
-            // 🔥 NEW AI FIELDS
-            riskScore,
-            recommendation:
-              riskScore >= 75
-                ? "REMOVE"
-                : riskScore >= 50
-                ? "REVIEW"
-                : "APPROVE",
-          };
-        })
-
-        // 🔥 SORT BY MOST DANGEROUS FIRST
-        .sort((a: Report, b: Report) => (b.riskScore || 0) - (a.riskScore || 0));
+      // The Backend has already run the ModBuddy Engine! 
+      // We just need to sort the posts by most dangerous first.
+      const posts = (json.posts || []).sort(
+        (a: Report, b: Report) => (b.riskScore || 0) - (a.riskScore || 0)
+      );
 
       setData(posts);
       setSelected(posts[0] || null);
@@ -98,7 +49,7 @@ export const Game = () => {
   };
 
   /* -------------------------
-     🔥 REAL MOD ACTIONS (OPTIMISTIC)
+     REAL MOD ACTIONS (OPTIMISTIC)
   --------------------------*/
   const action = async (type: string) => {
     if (!selected) return;
@@ -108,15 +59,13 @@ export const Game = () => {
 
     // 1. Optimistic Update: Instantly mutate local state
     setData((prevData) => {
-      const nextQueue = data.filter((item) => item.id !== targetPost.id);
-      setData(nextQueue);
-      // 2. Auto-advance the queue to keep the moderator moving
+      const nextQueue = prevData.filter((item) => item.id !== targetPost.id);
+      // Auto-advance the queue to keep the moderator moving
       setSelected(nextQueue[0] || null);
-      
       return nextQueue;
     });
 
-    // 3. Fire the network request in the background (no UI lock)
+    // 2. Fire the network request in the background
     try {
       const res = await fetch(`/api/${type.toLowerCase()}`, {
         method: "POST",
@@ -126,16 +75,12 @@ export const Game = () => {
 
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       
-      // Success! No need to refetch the whole queue.
     } catch (err) {
       console.error(`${type} failed for post ${targetPost.id}`, err);
       
-      // 4. Rollback: If the API fails, shove the post back into the queue
+      // Rollback: If the API fails, shove the post back into the queue
       setData((prevData) => [targetPost, ...prevData]);
-      
-      // Optionally re-select it if the queue had run empty
       setSelected((prevSelected) => prevSelected ? prevSelected : targetPost);
-      
       alert(`Network error: Failed to ${type}. Post returned to queue.`);
     }
   };
@@ -147,8 +92,6 @@ export const Game = () => {
       <div style={styles.header}>
         <h1 style={styles.title}>ModBuddy Dashboard</h1>
         <p style={styles.sub}>AI Moderation System</p>
-
-        {/* optional refresh button */}
         <button onClick={fetchQueue} style={{ marginTop: 10 }}>
           Refresh Queue
         </button>
@@ -160,7 +103,6 @@ export const Game = () => {
         {/* LEFT QUEUE */}
         <div style={styles.panel}>
           <h3>Queue</h3>
-
           {data.map((item) => (
             <div
               key={item.id}
@@ -171,12 +113,9 @@ export const Game = () => {
               }}
             >
               <b>{item.title}</b>
-
-              {/* 🔥 PHASE 4 ADDITION */}
               <p style={{ fontSize: 11, opacity: 0.8 }}>
                 Risk: {item.riskScore} | {item.recommendation}
               </p>
-
               <p style={{ fontSize: 12 }}>{item.category}</p>
             </div>
           ))}
@@ -185,7 +124,6 @@ export const Game = () => {
         {/* CENTER DETAILS */}
         <div style={styles.panel}>
           <h3>Details</h3>
-
           {selected && (
             <div style={styles.box}>
               <h4>{selected.title}</h4>
@@ -193,18 +131,11 @@ export const Game = () => {
               <p>Category: {selected.category}</p>
               <p>Priority: {selected.priority}/5</p>
 
-              {/* 🔥 THE MISSING LIGHT SWITCHES */}
               <div style={{ display: "flex", gap: 10, marginTop: 15 }}>
-                <button 
-                  style={styles.approve} 
-                  onClick={() => action("APPROVE")}
-                >
+                <button style={styles.approve} onClick={() => action("APPROVE")}>
                   Approve
                 </button>
-                <button 
-                  style={styles.remove} 
-                  onClick={() => action("REMOVE")}
-                >
+                <button style={styles.remove} onClick={() => action("REMOVE")}>
                   Remove
                 </button>
               </div>
@@ -215,27 +146,18 @@ export const Game = () => {
         {/* RIGHT AI PANEL */}
         <div style={styles.panel}>
           <h3>AI Insights</h3>
-
           {selected && (
             <div style={styles.box}>
               <p>Confidence: {selected.confidence}%</p>
-
-              {/* 🔥 PHASE 4 UPGRADE */}
               <p>Risk Score: {selected.riskScore}</p>
-
               <p>
-                Recommendation:{" "}
-                <b>{selected.recommendation}</b>
+                Recommendation: <b>{selected.recommendation}</b>
               </p>
-
-              <p>
-                Action Hint:{" "}
-                {selected.recommendation === "REMOVE"
-                  ? "High probability abuse content"
-                  : selected.recommendation === "REVIEW"
-                  ? "Needs moderator attention"
-                  : "Safe content"}
-              </p>
+              {selected.engineReason && (
+                <p>
+                  <b>Engine Reason:</b> {selected.engineReason}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -245,7 +167,7 @@ export const Game = () => {
   );
 };
 
-/* styles unchanged */
+/* STYLES */
 const styles: { [key: string]: CSSProperties } = {
   container: {
     fontFamily: "Arial",
@@ -296,3 +218,9 @@ const styles: { [key: string]: CSSProperties } = {
     cursor: "pointer"
   }
 };
+
+const container = document.getElementById("root");
+if (container) {
+  const root = createRoot(container);
+  root.render(<Game />);
+}
