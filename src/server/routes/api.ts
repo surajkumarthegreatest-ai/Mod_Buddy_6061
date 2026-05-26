@@ -97,7 +97,8 @@ api.get('/modqueue', async (c) => {
   }
 
   try {
-    const modQueue = await reddit.getModQueue({ subredditName } as any);
+    const subreddit = await reddit.getSubredditByName(subredditName);
+    const modQueue = await subreddit.getModQueue();   
     return c.json({ status: 'success', subreddit: subredditName, posts: modQueue });
   } catch (error) {
     return c.json<ErrorResponse>({ status: 'error', message: error instanceof Error ? error.message : 'Failed' }, 500);
@@ -111,8 +112,8 @@ api.post('/approve', async (c) => {
   }
 
   try {
-    // Use the full 't3_' ID directly
-    await reddit.approve(`t3_${normalizePostId(postId)}`);
+    const post = await reddit.getPostById(normalizePostId(postId));
+    await post.approve();   
     return c.json({ status: 'success', action: 'approved', postId });
   } catch (error) {
     return c.json<ErrorResponse>({ status: 'error', message: error instanceof Error ? error.message : 'Approve failed' }, 500);

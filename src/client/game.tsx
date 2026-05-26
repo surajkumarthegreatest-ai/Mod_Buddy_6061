@@ -1,4 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect,CSSProperties } from "react";
+
+
+type RawApiPost = {
+  id?: number | string;
+  title?: string;
+  priority?: number;
+  confidence?: number;
+  content?: string;
+};
 
 type Report = {
   id: number | string;
@@ -33,7 +42,7 @@ export const Game = () => {
 
       // 🔥 PHASE 4: AI RISK ENGINE + SORTING
       const posts = (json.posts || [])
-        .map((p: any, index: number) => {
+        .map((p: RawApiPost, index: number) => {
           const basePriority = p.priority || Math.floor(Math.random() * 5) + 1;
           const confidence = p.confidence || Math.floor(Math.random() * 40) + 60;
 
@@ -69,7 +78,7 @@ export const Game = () => {
         })
 
         // 🔥 SORT BY MOST DANGEROUS FIRST
-        .sort((a: any, b: any) => b.riskScore - a.riskScore);
+        .sort((a: Report, b: Report) => (b.riskScore || 0) - (a.riskScore || 0));
 
       setData(posts);
       setSelected(posts[0] || null);
@@ -89,24 +98,45 @@ export const Game = () => {
   };
 
   /* -------------------------
-     🔥 REAL MOD ACTIONS
+     🔥 REAL MOD ACTIONS (OPTIMISTIC)
   --------------------------*/
   const action = async (type: string) => {
     if (!selected) return;
 
+    // Capture the current post in case the server fails and we need to roll back
+    const targetPost = selected;
+
+    // 1. Optimistic Update: Instantly mutate local state
+    setData((prevData) => {
+      const nextQueue = data.filter((item) => item.id !== targetPost.id);
+      setData(nextQueue);
+      // 2. Auto-advance the queue to keep the moderator moving
+      setSelected(nextQueue[0] || null);
+      
+      return nextQueue;
+    });
+
+    // 3. Fire the network request in the background (no UI lock)
     try {
-      await fetch(`/api/${type.toLowerCase()}`, {
+      const res = await fetch(`/api/${type.toLowerCase()}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postId: selected.id }),
+        body: JSON.stringify({ postId: targetPost.id }),
       });
 
-      alert(`${type}: ${selected.title}`);
-
-      // refresh queue after action
-      fetchQueue();
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      
+      // Success! No need to refetch the whole queue.
     } catch (err) {
-      console.error(`${type} failed`, err);
+      console.error(`${type} failed for post ${targetPost.id}`, err);
+      
+      // 4. Rollback: If the API fails, shove the post back into the queue
+      setData((prevData) => [targetPost, ...prevData]);
+      
+      // Optionally re-select it if the queue had run empty
+      setSelected((prevSelected) => prevSelected ? prevSelected : targetPost);
+      
+      alert(`Network error: Failed to ${type}. Post returned to queue.`);
     }
   };
 
@@ -162,6 +192,22 @@ export const Game = () => {
               <p>{selected.content}</p>
               <p>Category: {selected.category}</p>
               <p>Priority: {selected.priority}/5</p>
+
+              {/* 🔥 THE MISSING LIGHT SWITCHES */}
+              <div style={{ display: "flex", gap: 10, marginTop: 15 }}>
+                <button 
+                  style={styles.approve} 
+                  onClick={() => action("APPROVE")}
+                >
+                  Approve
+                </button>
+                <button 
+                  style={styles.remove} 
+                  onClick={() => action("REMOVE")}
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -200,7 +246,7 @@ export const Game = () => {
 };
 
 /* styles unchanged */
-const styles: any = {
+const styles: { [key: string]: CSSProperties } = {
   container: {
     fontFamily: "Arial",
     background: "#0b1220",

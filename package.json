@@ -18,6 +18,7 @@
     "node": ">=22.2.0"
   },
   "dependencies": {
+    "@devvit/public-api": "^0.12.24",
     "@devvit/start": "0.12.24",
     "@devvit/web": "0.12.24",
     "@hono/node-server": "2.0.3",
