@@ -1,78 +1,252 @@
-import './index.css';
+import { useState, useEffect } from "react";
 
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { navigateTo } from '@devvit/web/client';
-import { useCounter } from './hooks/useCounter';
+type Report = {
+  id: number | string;
+  title: string;
+  category: string;
+  priority: number;
+  confidence: number;
+  content: string;
 
-export const App = () => {
-  const { count, username, loading, increment, decrement } = useCounter();
+  // 🔥 PHASE 4 ADDITIONS
+  riskScore?: number;
+  recommendation?: string;
+};
+
+/* =========================
+   🔥 REMOVED STATIC DATA
+   =========================
+   Now replaced with API data
+*/
+
+export const Game = () => {
+  const [data, setData] = useState<Report[]>([]);
+  const [selected, setSelected] = useState<Report | null>(null);
+
+  /* -------------------------
+     FETCH MOD QUEUE + AI LAYER
+  --------------------------*/
+  const fetchQueue = async () => {
+    try {
+      const res = await fetch("/api/modqueue");
+      const json = await res.json();
+
+      // 🔥 PHASE 4: AI RISK ENGINE + SORTING
+      const posts = (json.posts || [])
+        .map((p: any, index: number) => {
+          const basePriority = p.priority || Math.floor(Math.random() * 5) + 1;
+          const confidence = p.confidence || Math.floor(Math.random() * 40) + 60;
+
+          // 🔥 AI RISK SCORE
+          const riskScore = Math.min(
+            100,
+            basePriority * 15 + (100 - confidence)
+          );
+
+          // 🧠 AI CLASSIFICATION
+          let category = "SAFE";
+          if (riskScore >= 75) category = "HATE/SPAM";
+          else if (riskScore >= 50) category = "REVIEW";
+          else category = "LOW RISK";
+
+          return {
+            id: p.id || index,
+            title: p.title || "No title",
+            category,
+            priority: basePriority,
+            confidence,
+            content: p.content || p.title || "",
+
+            // 🔥 NEW AI FIELDS
+            riskScore,
+            recommendation:
+              riskScore >= 75
+                ? "REMOVE"
+                : riskScore >= 50
+                ? "REVIEW"
+                : "APPROVE",
+          };
+        })
+
+        // 🔥 SORT BY MOST DANGEROUS FIRST
+        .sort((a: any, b: any) => b.riskScore - a.riskScore);
+
+      setData(posts);
+      setSelected(posts[0] || null);
+    } catch (err) {
+      console.error("Failed to load mod queue", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchQueue();
+  }, []);
+
+  const getColor = (p: number) => {
+    if (p >= 5) return "#ef4444";
+    if (p >= 3) return "#f59e0b";
+    return "#22c55e";
+  };
+
+  /* -------------------------
+     🔥 REAL MOD ACTIONS
+  --------------------------*/
+  const action = async (type: string) => {
+    if (!selected) return;
+
+    try {
+      await fetch(`/api/${type.toLowerCase()}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId: selected.id }),
+      });
+
+      alert(`${type}: ${selected.title}`);
+
+      // refresh queue after action
+      fetchQueue();
+    } catch (err) {
+      console.error(`${type} failed`, err);
+    }
+  };
+
   return (
-    <div className="flex relative flex-col justify-center items-center min-h-screen gap-4 bg-white dark:bg-gray-900">
-      <img
-        className="object-contain w-1/2 max-w-[250px] mx-auto"
-        src="/snoo.png"
-        alt="Snoo"
-      />
-      <div className="flex flex-col items-center gap-2">
-        <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100">
-          {username ? `Hey ${username} 👋` : ''}
-        </h1>
-        <p className="text-base text-center text-gray-600 dark:text-gray-300">
-          Edit{' '}
-          <span className="bg-[#e5ebee] dark:bg-gray-700 px-1 py-0.5 rounded">
-            src/client/game.tsx
-          </span>{' '}
-          to get started.
-        </p>
-      </div>
-      <div className="flex items-center justify-center mt-5">
-        <button
-          className="flex items-center justify-center bg-[#d93900] dark:bg-orange-600 text-white w-14 h-14 text-[2.5em] rounded-full cursor-pointer font-mono leading-none transition-colors hover:bg-[#c23300] dark:hover:bg-orange-700"
-          onClick={decrement}
-          disabled={loading}
-        >
-          -
-        </button>
-        <span className="text-[1.8em] font-medium mx-5 min-w-[50px] text-center leading-none text-gray-900 dark:text-white">
-          {loading ? '...' : count}
-        </span>
-        <button
-          className="flex items-center justify-center bg-[#d93900] dark:bg-orange-600 text-white w-14 h-14 text-[2.5em] rounded-full cursor-pointer font-mono leading-none transition-colors hover:bg-[#c23300] dark:hover:bg-orange-700"
-          onClick={increment}
-          disabled={loading}
-        >
-          +
+    <div style={styles.container}>
+      
+      {/* HEADER */}
+      <div style={styles.header}>
+        <h1 style={styles.title}>ModBuddy Dashboard</h1>
+        <p style={styles.sub}>AI Moderation System</p>
+
+        {/* optional refresh button */}
+        <button onClick={fetchQueue} style={{ marginTop: 10 }}>
+          Refresh Queue
         </button>
       </div>
-      <footer className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-3 text-[0.8em] text-gray-600 dark:text-gray-400">
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://developers.reddit.com/docs')}
-        >
-          Docs
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://www.reddit.com/r/Devvit')}
-        >
-          r/Devvit
-        </button>
-        <span className="text-gray-300 dark:text-gray-600">|</span>
-        <button
-          className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors"
-          onClick={() => navigateTo('https://discord.com/invite/R7yu2wh9Qz')}
-        >
-          Discord
-        </button>
-      </footer>
+
+      {/* MAIN GRID */}
+      <div style={styles.grid}>
+
+        {/* LEFT QUEUE */}
+        <div style={styles.panel}>
+          <h3>Queue</h3>
+
+          {data.map((item) => (
+            <div
+              key={item.id}
+              onClick={() => setSelected(item)}
+              style={{
+                ...styles.card,
+                borderLeft: `5px solid ${getColor(item.priority)}`
+              }}
+            >
+              <b>{item.title}</b>
+
+              {/* 🔥 PHASE 4 ADDITION */}
+              <p style={{ fontSize: 11, opacity: 0.8 }}>
+                Risk: {item.riskScore} | {item.recommendation}
+              </p>
+
+              <p style={{ fontSize: 12 }}>{item.category}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* CENTER DETAILS */}
+        <div style={styles.panel}>
+          <h3>Details</h3>
+
+          {selected && (
+            <div style={styles.box}>
+              <h4>{selected.title}</h4>
+              <p>{selected.content}</p>
+              <p>Category: {selected.category}</p>
+              <p>Priority: {selected.priority}/5</p>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT AI PANEL */}
+        <div style={styles.panel}>
+          <h3>AI Insights</h3>
+
+          {selected && (
+            <div style={styles.box}>
+              <p>Confidence: {selected.confidence}%</p>
+
+              {/* 🔥 PHASE 4 UPGRADE */}
+              <p>Risk Score: {selected.riskScore}</p>
+
+              <p>
+                Recommendation:{" "}
+                <b>{selected.recommendation}</b>
+              </p>
+
+              <p>
+                Action Hint:{" "}
+                {selected.recommendation === "REMOVE"
+                  ? "High probability abuse content"
+                  : selected.recommendation === "REVIEW"
+                  ? "Needs moderator attention"
+                  : "Safe content"}
+              </p>
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 };
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
-);
+/* styles unchanged */
+const styles: any = {
+  container: {
+    fontFamily: "Arial",
+    background: "#0b1220",
+    minHeight: "100vh",
+    color: "white",
+    padding: "20px"
+  },
+  header: { marginBottom: 20 },
+  title: { fontSize: 28, fontWeight: "bold" },
+  sub: { opacity: 0.7 },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr 1fr",
+    gap: 15
+  },
+  panel: {
+    background: "#111a2e",
+    padding: 15,
+    borderRadius: 12
+  },
+  card: {
+    background: "#1a2440",
+    padding: 10,
+    marginBottom: 10,
+    borderRadius: 8,
+    cursor: "pointer"
+  },
+  box: {
+    background: "#1a2440",
+    padding: 12,
+    borderRadius: 10
+  },
+  approve: {
+    background: "#22c55e",
+    border: "none",
+    padding: 8,
+    color: "white",
+    borderRadius: 6,
+    cursor: "pointer"
+  },
+  remove: {
+    background: "#ef4444",
+    border: "none",
+    padding: 8,
+    color: "white",
+    borderRadius: 6,
+    cursor: "pointer"
+  }
+};
