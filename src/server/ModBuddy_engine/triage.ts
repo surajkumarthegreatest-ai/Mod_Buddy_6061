@@ -6,7 +6,7 @@ export interface TriageInput {
 
 export interface TriageOutput {
   risk: 'low' | 'medium' | 'urgent';
-  confidence: number; // minimum=0, maximum=1
+  confidence: number; 
   reason: string;
   suggestedAction: 'approve' | 'flag_for_review' | 'remove';
 }
@@ -17,7 +17,6 @@ export const performFallbackTriage = (input: TriageInput): TriageOutput => {
   const age = Math.max(0, Number(input.accountAgeDays || 0));
   const normalizedText = trimmedText.toLowerCase();
 
-  // Word categories rulesets
   const spamKeywords = [
     'viagra', 'cash', 'click link', 'crypto', 'free money', 'earn cash', 
     'buy followers', 'register here', 'dm me', 'discord link', 'telegram link', 
@@ -36,7 +35,6 @@ export const performFallbackTriage = (input: TriageInput): TriageOutput => {
   let toxicCount = 0;
   let neutralCount = 0;
 
-  // \b ensures we only match whole words. 'i' makes it case-insensitive.
   spamKeywords.forEach(kw => {
     if (new RegExp(`\\b${kw}\\b`, 'i').test(normalizedText)) spamCount++;
   });
@@ -50,7 +48,6 @@ export const performFallbackTriage = (input: TriageInput): TriageOutput => {
   const hasSevereSlurOrSelfHarm = 
     new RegExp(`\\b(kill yourself|kys|retard)\\b`, 'i').test(normalizedText);
 
-  // Content Weight Calculation
   let contentScore = 0;
   if (spamCount > 0) contentScore -= (spamCount * 2.5);
   if (toxicCount > 0) contentScore -= (toxicCount * 3.0);
@@ -60,7 +57,6 @@ export const performFallbackTriage = (input: TriageInput): TriageOutput => {
   let suggestedAction: 'approve' | 'flag_for_review' | 'remove' = 'approve';
   const reasons: string[] = [];
 
-  // Matrix evaluation
   if (repCount >= 8) {
     if (age <= 5 || contentScore < -2 || hasSevereSlurOrSelfHarm) {
       risk = 'urgent';
@@ -86,7 +82,7 @@ export const performFallbackTriage = (input: TriageInput): TriageOutput => {
       reasons.push(`Accumulated ${repCount} feedback flags in a short period window. Queued for standard moderation audit.`);
     }
   } else {
-    // Low reports (0, 1, or 2)
+    
     if (hasSevereSlurOrSelfHarm) {
       risk = 'urgent';
       suggestedAction = 'remove';
@@ -106,7 +102,7 @@ export const performFallbackTriage = (input: TriageInput): TriageOutput => {
         reasons.push(`Questionable content score (${contentScore.toFixed(1)}) on standard profile. Flagged for review.`);
       }
     } else {
-      // Safe evaluation (INCLUDES DAY-ZERO LOOPHOLE FIX)
+   
       if (age <= 2 && contentScore < 0) {
         risk = 'medium';
         suggestedAction = 'flag_for_review';
@@ -123,19 +119,18 @@ export const performFallbackTriage = (input: TriageInput): TriageOutput => {
     }
   }
 
-  // Confidence mapping
   let baseConfidence = 1.0;
   if (suggestedAction === 'flag_for_review') {
-    baseConfidence -= 0.15; // Reviews have intrinsic uncertainty
+    baseConfidence -= 0.15; 
   }
   if (age > 100 && contentScore < -1 && repCount > 0) {
-    baseConfidence -= 0.12; // Contradictory old profile with bad text
+    baseConfidence -= 0.12; 
   }
   if (age < 3 && contentScore > 1 && repCount > 1) {
-    baseConfidence -= 0.18; // Contradictory fresh profile, clean text, but flagged
+    baseConfidence -= 0.18; 
   }
 
-  // Adjust by reports slightly to introduce variation
+
   const confidence = Math.min(0.99, Math.max(0.48, baseConfidence - (repCount * 0.008)));
 
   return {
