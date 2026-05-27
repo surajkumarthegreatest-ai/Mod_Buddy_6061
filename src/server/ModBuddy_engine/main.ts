@@ -1,5 +1,16 @@
 import { analyzeContent } from './ai_client';
 import { performTriage, TriageInput } from './triage';
+import {Devvit, SettingScope} from '@devvit/public-api'; 
+
+Devvit.addSettings([
+  {
+    name: 'gemini_api_key', // Must match the key used in .get()
+    type: 'string',
+    label: 'Gemini API Key',
+    isSecret: true,
+    scope: SettingScope.App, // Crucial: Must be App scope
+  },
+]);
 
 export async function processQueueItem(input: TriageInput,apikey: string) {
   // STEP 1: The "Zero-Latency Filter" (Your Regex Engine)
