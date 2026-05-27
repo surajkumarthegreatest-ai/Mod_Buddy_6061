@@ -43,60 +43,42 @@ Devvit.addTrigger({
   event: 'PostReport',
   onEvent: async (event, context) => {
     try {
-      // Get the Post and User from Reddit
-      if(!event.post) {
-        console.error("Invalid event data: missing post");
-        return;
-      }
+      if (!event.post?.id || !event.post?.authorId) return;
+
       const post = await context.reddit.getPostById(event.post.id);
-      if(!post.authorId) {
-        console.error("Post is missing authorId");
-        return;
-      }
-      const author = await context.reddit.getUserById(post.authorId);
+      const author = await context.reddit.getUserById(event.post.authorId);
+      const apiKey = await context.settings.get('gemini_api_key') as string;
 
-      // Extract Data
+      if (!post || !author || !apiKey) return;
+
       const text = post.body || post.title || "";
-      const currentReports = post.numberOfReports||1;   
-      
-      if (!author || !author.createdAt) {
-        console.warn("Author data not available yet");
-        return;
-      }   
-
+      const currentReports = post.numberOfReports ?? 1;
       const ageMs = Date.now() - author.createdAt.getTime();
       const accountAgeDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
 
-      // Fetch your API Key from Devvit Settings (Assuming you configured this in Devvit)
-      // If you are hardcoding it for now, just replace this with your string key.
-      const apiKey = await context.settings.get('gemini_api_key') as string; 
-      
-      if (!apiKey) {
-        console.error("Missing Gemini API Key");
-        return;
-      }
+      const decision = await processQueueItem({ text, reports: currentReports, accountAgeDays }, apiKey);
 
-      // Feed the real Reddit data into your engine
-      const decision = await processQueueItem({
-        text: text,
-        reports: currentReports,
-        accountAgeDays: accountAgeDays
-      }, apiKey);
-
-      // Take action based on the engine's decision
-      if (decision.suggestedAction === 'remove') {
-        await context.reddit.remove(post.id, false);
-        console.log(`Removed post: ${post.id}`);
-      } else if (decision.suggestedAction === 'approve') {
-        await context.reddit.approve(post.id);
-        console.log(`Approved post: ${post.id}`);
+      // EXECUTE THE HANDS
+      switch (decision.suggestedAction) {
+        case 'remove':
+          await context.reddit.remove(post.id, false);
+          await context.reddit.submitComment({
+            id: post.id,
+            text: `ModBuddy Action: Removed. Reason: ${decision.reason}`
+          });
+          break;
+        case 'approve':
+          await context.reddit.approve(post.id);
+          break;
+        case 'flag_for_review':
+          await context.reddit.report( post,decision.reason );
+          break;
       }
     } catch (error) {
-      console.error("Error in PostReport trigger:", error);
+      console.error("Trigger Error:", error);
     }
   },
 });
-
 const app = new Hono();
 const internal = new Hono();
 

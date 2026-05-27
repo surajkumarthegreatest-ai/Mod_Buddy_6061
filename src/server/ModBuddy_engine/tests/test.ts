@@ -8,7 +8,7 @@ async function test() {
   const testInput = JSON.parse(fileContent);
   var output = [];
   for (const item of testInput) {
-    const result = await processQueueItem(item);
+    const result = await processQueueItem(item,"AIzaSyDLi9_gGI25ZAmfMSm1akOfbJ1oE_ylW44");
     output.push(result);
   }
   await fileHandle2.writeFile(JSON.stringify(output, null, 2), { encoding: 'utf-8' });
