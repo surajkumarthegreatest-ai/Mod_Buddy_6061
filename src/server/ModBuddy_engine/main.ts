@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { performFallbackTriage } from './triage'; // Keep your local fallback!
+import { performFallbackTriage } from './triage'; 
 
 export interface QueueItemData {
     text: string;
@@ -14,7 +14,6 @@ export interface ModerationDecision {
     suggestedAction: 'approve' | 'remove' | 'flag_for_review';
 }
 
-// Define the exact cascade order of models to try
 const GEMINI_MODELS = [
   'gemini-2.5-flash',
   'gemini-2.0-flash',
@@ -23,7 +22,7 @@ const GEMINI_MODELS = [
 ];
 
 export async function processQueueItem(data: QueueItemData, apiKey: string): Promise<ModerationDecision> {
-  // Initialize the official AI client
+ 
   const ai = new GoogleGenAI({ apiKey: apiKey });
 
   const schema = {
@@ -49,7 +48,6 @@ export async function processQueueItem(data: QueueItemData, apiKey: string): Pro
 
   let lastError: Error | null = null;
 
-  // 🚨 The Multi-Model Fallback Cascade 🚨
   for (const model of GEMINI_MODELS) {
     try {
       console.log(`[AI Engine] Attempting analysis using model: ${model}...`);
@@ -60,14 +58,13 @@ export async function processQueueItem(data: QueueItemData, apiKey: string): Pro
         config: {
           responseMimeType: 'application/json',
           responseSchema: schema,
-          temperature: 0.2, // Keep it low for logical consistency
+          temperature: 0.2, 
         },
       });
 
       const jsonResponse = response.text;
       if (!jsonResponse) throw new Error('Empty response from model.');
 
-      // Because we used responseSchema, we know this parse is safe!
       const decision: ModerationDecision = JSON.parse(jsonResponse);
       
       console.log(`[AI Engine] Success! ${model} generated a decision.`);
@@ -76,17 +73,16 @@ export async function processQueueItem(data: QueueItemData, apiKey: string): Pro
     } catch (error: any) {
       console.warn(`[AI Engine] ${model} failed or rate-limited. Passing to next model. Error: ${error.message}`);
       lastError = error;
-      // The loop automatically continues to the next model!
+      
     }
   }
 
-  // If the code reaches here, ALL models failed. Trigger the local math fallback.
   console.error("[AI Engine] CRITICAL: All Gemini models exhausted. Triggering local heuristics.");
   
   try {
       return performFallbackTriage(data);
   } catch (fallbackError) {
-      // The ultimate safety net if even your local math fails
+
       return {
           risk: 'medium',
           confidence: 0,
