@@ -8,14 +8,12 @@ import { triggers } from './routes/triggers';
 import { Devvit , SettingScope} from '@devvit/public-api';
 
 import { processQueueItem } from './ModBuddy_engine/main'; 
-
-// 1. ENABLE REDDIT API ACCESS
 Devvit.configure({
   redditAPI: true,
   http: true,
 });
 
-// 2. DEFINE YOUR SETTINGS (Required to use context.settings.get)
+
 Devvit.addSettings([
   {
     name: 'gemini_api_key',
@@ -26,7 +24,6 @@ Devvit.addSettings([
   },
 ]);
 
-// 3. YOUR DASHBOARD MENU BUTTON
 Devvit.addMenuItem({
   label: 'Spawn ModBuddy Dashboard',
   location: 'subreddit',
@@ -51,7 +48,6 @@ Devvit.addMenuItem({
   },
 });
 
-// 4. THE POST REPORT TRIGGER
 Devvit.addTrigger({
   event: 'PostReport',
   onEvent: async (event, context) => {
@@ -94,7 +90,6 @@ Devvit.addTrigger({
   },
 });
 
-// 5. THE NEW POST DETECTED TRIGGER
 Devvit.addTrigger({
   event: 'PostSubmit',
   onEvent: async (event, context) => {
@@ -138,7 +133,6 @@ Devvit.addTrigger({
   },
 });
 
-// 6. YOUR HONO WEB SERVER
 const app = new Hono();
 const internal = new Hono();
 
@@ -155,5 +149,4 @@ serve({
   port: getServerPort(),
 });
 
-// 🚨 7. THE MISSING LINK (THIS IS WHAT WAKES UP REDDIT) 🚨
 export default Devvit;
