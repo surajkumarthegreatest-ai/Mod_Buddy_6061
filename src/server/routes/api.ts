@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { context, redis, reddit ,settings } from '@devvit/web/server';
+import { context, redis, reddit } from '@devvit/web/server';
 import { processQueueItem } from '../ModBuddy_engine/main';
 import type {
   DecrementResponse,
@@ -94,7 +94,7 @@ api.get('/modqueue', async (c) => {
   if (!subredditName) return c.json({ status: 'error', message: 'Missing name' }, 400);
 
   // 1. Fetch API Key ONCE before the loop
-  const apiKey = await settings.get('ai_secret_key') as string;
+  const apiKey = "AIzaSyDLi9_gGI25ZAmfMSm1akOfbJ1oE_ylW44";
   if (!apiKey) return c.json({ status: 'error', message: 'API Key missing' }, 500);
 
   try {

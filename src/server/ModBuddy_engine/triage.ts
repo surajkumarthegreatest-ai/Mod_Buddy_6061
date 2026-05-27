@@ -11,7 +11,7 @@ export interface TriageOutput {
   suggestedAction: 'approve' | 'flag_for_review' | 'remove';
 }
 
-export const performTriage = (input: TriageInput): TriageOutput => {
+export const performFallbackTriage = (input: TriageInput): TriageOutput => {
   const trimmedText = (input.text || '').trim();
   const repCount = Math.max(0, Number(input.reports || 0));
   const age = Math.max(0, Number(input.accountAgeDays || 0));

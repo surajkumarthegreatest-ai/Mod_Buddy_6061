@@ -5,15 +5,28 @@ import { api } from './routes/api';
 import { forms } from './routes/forms';
 import { menu } from './routes/menu';
 import { triggers } from './routes/triggers';
-import { Devvit } from '@devvit/public-api'; // Import Devvit for menu item
+import { Devvit , SettingScope} from '@devvit/public-api';
 
-// 1. IMPORT YOUR ENGINE HERE
 import { processQueueItem } from './ModBuddy_engine/main'; 
 
-// Definition
+// 1. ENABLE REDDIT API ACCESS
+Devvit.configure({
+  redditAPI: true,
+  http: true,
+});
 
-    
+// 2. DEFINE YOUR SETTINGS (Required to use context.settings.get)
+Devvit.addSettings([
+  {
+    name: 'gemini_api_key',
+    type: 'string',
+    label: 'Gemini AI API Key',
+    isSecret: true,
+    scope: SettingScope.App,
+  },
+]);
 
+// 3. YOUR DASHBOARD MENU BUTTON
 Devvit.addMenuItem({
   label: 'Spawn ModBuddy Dashboard',
   location: 'subreddit',
@@ -38,27 +51,28 @@ Devvit.addMenuItem({
   },
 });
 
-// 2. ADD YOUR TRIGGER HERE
+// 4. THE POST REPORT TRIGGER
 Devvit.addTrigger({
   event: 'PostReport',
   onEvent: async (event, context) => {
+    console.log(`🚨 POST REPORTED WAKE UP: ${event.post?.id}`);
     try {
       if (!event.post?.id || !event.post?.authorId) return;
 
       const post = await context.reddit.getPostById(event.post.id);
       const author = await context.reddit.getUserById(event.post.authorId);
-      const apiKey = await context.settings.get('gemini_api_key') as string;
+      const apiKey = "AIzaSyDLi9_gGI25ZAmfMSm1akOfbJ1oE_ylW44";
 
       if (!post || !author || !apiKey) return;
 
       const text = post.body || post.title || "";
       const currentReports = post.numberOfReports ?? 1;
+      
       const ageMs = Date.now() - author.createdAt.getTime();
       const accountAgeDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
 
       const decision = await processQueueItem({ text, reports: currentReports, accountAgeDays }, apiKey);
 
-      // EXECUTE THE HANDS
       switch (decision.suggestedAction) {
         case 'remove':
           await context.reddit.remove(post.id, false);
@@ -71,7 +85,7 @@ Devvit.addTrigger({
           await context.reddit.approve(post.id);
           break;
         case 'flag_for_review':
-          await context.reddit.report( post,decision.reason );
+          await context.reddit.report( post, decision );
           break;
       }
     } catch (error) {
@@ -79,12 +93,58 @@ Devvit.addTrigger({
     }
   },
 });
+
+// 5. THE NEW POST DETECTED TRIGGER
+Devvit.addTrigger({
+  event: 'PostSubmit',
+  onEvent: async (event, context) => {
+    console.log(`🚨 NEW POST DETECTED WAKE UP: ${event.post?.id}`);
+    try {
+      if (!event.post?.id || !event.author?.id) return;
+
+      const post = await context.reddit.getPostById(event.post.id);
+      const author = await context.reddit.getUserById(event.author.id);
+      const apiKey = "AIzaSyDLi9_gGI25ZAmfMSm1akOfbJ1oE_ylW44";
+
+      if (!post || !author || !apiKey) {
+          console.warn("Missing post, author, or API key");
+          return;
+      }
+
+      const text = post.body || post.title || "";
+      const ageMs = Date.now() - author.createdAt.getTime();
+      const accountAgeDays = Math.floor(ageMs / (1000 * 60 * 60 * 24));
+
+      const decision = await processQueueItem({ 
+        text: text, 
+        reports: 0, 
+        accountAgeDays: accountAgeDays 
+      }, apiKey);
+
+      if (decision.suggestedAction === 'remove') {
+        await context.reddit.remove(post.id, false);
+        await context.reddit.submitComment({
+          id: post.id,
+          text: `ModBuddy Auto-Action: Removed. Reason: ${decision.reason}`
+        });
+        console.log(`Bot successfully removed post: ${post.id}`);
+      } else if (decision.suggestedAction === 'flag_for_review') {
+        await context.reddit.report( post,decision );
+        console.log(`Bot flagged post for human review: ${post.id}`);
+      }
+    } catch (error) {
+      console.error("PostSubmit Trigger Error:", error);
+    }
+  },
+});
+
+// 6. YOUR HONO WEB SERVER
 const app = new Hono();
 const internal = new Hono();
 
 internal.route('/menu', menu);
 internal.route('/form', forms);
-internal.route('/triggers', triggers); // This keeps your /on-app-install HTTP webhook working!
+internal.route('/triggers', triggers); 
 
 app.route('/api', api);
 app.route('/internal', internal);
@@ -94,3 +154,6 @@ serve({
   createServer,
   port: getServerPort(),
 });
+
+// 🚨 7. THE MISSING LINK (THIS IS WHAT WAKES UP REDDIT) 🚨
+export default Devvit;
