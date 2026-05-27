@@ -13,17 +13,9 @@ type ErrorResponse = {
 };
 
 export const api = new Hono();
-
-/* -------------------------
-   HELPERS (FIX FOR t3_/t1_ ERROR)
---------------------------*/
 const normalizePostId = (id: string): `t3_${string}` => {
   return (id.startsWith('t3_') || id.startsWith('t1_') ? id : `t3_${id}`) as `t3_${string}`;
 };
-
-/* -------------------------
-   INIT ENDPOINT
---------------------------*/
 api.get('/init', async (c) => {
   const { postId } = context;
 
@@ -67,33 +59,31 @@ api.get('/init', async (c) => {
 });
 
 api.post('/increment', async (c) => {
-  const { postId } = await c.req.json<{ postId: string }>(); // Get from body
+  const { postId } = await c.req.json<{ postId: string }>(); 
 
   if (!postId) {
     return c.json<ErrorResponse>({ status: 'error', message: 'postId is required' }, 400);
   }
 
-  const count = await redis.incrBy('count', 1); // Key is 'count'
+  const count = await redis.incrBy('count', 1); 
 
   return c.json<IncrementResponse>({ count, postId, type: 'increment' });
 });
 
 api.post('/decrement', async (c) => {
-  const { postId } = await c.req.json<{ postId: string }>(); // Get from body
+  const { postId } = await c.req.json<{ postId: string }>(); 
 
   if (!postId) {
     return c.json<ErrorResponse>({ status: 'error', message: 'postId is required' }, 400);
   }
 
-  const count = await redis.incrBy('count', -1); // Decrement by 1
+  const count = await redis.incrBy('count', -1); 
 
   return c.json<DecrementResponse>({ count, postId, type: 'decrement' });
 });   
 api.get('/modqueue', async (c) => {
   const { subredditName } = context;
   if (!subredditName) return c.json({ status: 'error', message: 'Missing name' }, 400);
-
-  // 1. Fetch API Key ONCE before the loop
   const apiKey = "AIzaSyDLi9_gGI25ZAmfMSm1akOfbJ1oE_ylW44";
   if (!apiKey) return c.json({ status: 'error', message: 'API Key missing' }, 500);
 
@@ -104,8 +94,8 @@ api.get('/modqueue', async (c) => {
     const analyzedPosts = await Promise.all(
       rawQueue.map(async (item) => {
         const authorId = (item as any).authorId;
-        // 2. Fetch author age dynamically
-        let accountAgeDays = 30; // Default
+      
+        let accountAgeDays = 30; 
         if (authorId ) {
             const author = await reddit.getUserById(authorId);
             if (author) {
@@ -155,9 +145,7 @@ api.post('/approve', async (c) => {
   }
 });   
 
-/* -------------------------
-   REMOVE
---------------------------*/
+
 
 api.post('/remove', async (c) => {
   const { postId } = await c.req.json<{ postId: string }>();
@@ -169,8 +157,8 @@ api.post('/remove', async (c) => {
   try {
     // 1. Get the post object
     const post = await reddit.getPostById(normalizePostId(postId));
-    // 2. Call remove() on the post object
-    await post.remove(); // Use post.remove() instead of reddit.mod.remove()
+   
+    await post.remove(); 
 
     return c.json({ status: 'success', action: 'removed', postId });
   } catch (error) {
@@ -191,7 +179,7 @@ api.post('/spam', async (c) => {
 
   try {
     const post = await reddit.getPostById(normalizePostId(postId));
-    await post.remove(true); // Remove and mark as spam
+    await post.remove(true); 
 
     return c.json({ status: 'success', action: 'marked_spam', postId });
   } catch (error) {
@@ -212,7 +200,7 @@ api.post('/lock', async (c) => {
 
   try {
     const post = await reddit.getPostById(normalizePostId(postId));
-    await post.lock(); // Lock the post
+    await post.lock(); 
 
     return c.json({ status: 'success', action: 'locked', postId });
   } catch (error) {
