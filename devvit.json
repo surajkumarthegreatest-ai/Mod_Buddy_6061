@@ -22,6 +22,6 @@
     "build": "vite build"
   },
   "dev": {
-    "subreddit": "mod_buddy_6061"
+    "subreddit": "mod_buddy_6061_dev"
   }
 }
