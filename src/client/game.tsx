@@ -10,23 +10,19 @@ type Report = {
   content: string;
   riskScore?: number;
   recommendation?: string;
-  engineReason?: string; // Added to catch the engine's reason from the backend
+  engineReason?: string; 
 };
 
 export const Game = () => {
   const [data, setData] = useState<Report[]>([]);
   const [selected, setSelected] = useState<Report | null>(null);
 
-  /* -------------------------
-     FETCH MOD QUEUE (FROM REAL BACKEND)
-  --------------------------*/
   const fetchQueue = async () => {
     try {
       const res = await fetch("/api/modqueue");
       const json = await res.json();
 
-      // The Backend has already run the ModBuddy Engine! 
-      // We just need to sort the posts by most dangerous first.
+
       const posts = (json.posts || []).sort(
         (a: Report, b: Report) => (b.riskScore || 0) - (a.riskScore || 0)
       );
@@ -48,24 +44,18 @@ export const Game = () => {
     return "#22c55e";
   };
 
-  /* -------------------------
-     REAL MOD ACTIONS (OPTIMISTIC)
-  --------------------------*/
+
   const action = async (type: string) => {
     if (!selected) return;
-
-    // Capture the current post in case the server fails and we need to roll back
     const targetPost = selected;
 
-    // 1. Optimistic Update: Instantly mutate local state
     setData((prevData) => {
       const nextQueue = prevData.filter((item) => item.id !== targetPost.id);
-      // Auto-advance the queue to keep the moderator moving
+    
       setSelected(nextQueue[0] || null);
       return nextQueue;
     });
 
-    // 2. Fire the network request in the background
     try {
       const res = await fetch(`/api/${type.toLowerCase()}`, {
         method: "POST",
@@ -78,7 +68,6 @@ export const Game = () => {
     } catch (err) {
       console.error(`${type} failed for post ${targetPost.id}`, err);
       
-      // Rollback: If the API fails, shove the post back into the queue
       setData((prevData) => [targetPost, ...prevData]);
       setSelected((prevSelected) => prevSelected ? prevSelected : targetPost);
       alert(`Network error: Failed to ${type}. Post returned to queue.`);
